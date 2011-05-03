@@ -1,0 +1,5 @@
+name = Oplata.md interface module
+description = API for Oplata.md interface.
+core = 6.x
+
+dependencies[] = user_deposit

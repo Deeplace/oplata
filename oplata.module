@@ -1,0 +1,182 @@
+<?php
+
+/**
+ * @file
+ * Oplata.md module.
+ */
+
+/**
+ * @see Oplata
+ */
+require_once 'oplata.class.inc';
+
+/**
+ * Implementation of hook_perm().
+ */
+function oplata_perm() {
+  return array('access oplata', 'checkout oplata', 'administer oplata');
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function oplata_menu() {
+  $items = array();
+
+  $items['admin/settings/oplata'] = array(
+    'title' => 'Oplata.md gate',
+    'description' => 'Configure Oplata.md gate.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('oplata_settings'),
+    'access arguments' => array('administer oplata'),
+    'file' => 'oplata.admin.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  $items['oplata/checkout'] = array(
+    'title' => 'Oplata checkout',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('oplata_checkout'),
+    'access arguments' => array('checkout oplata'),
+    'type' => MENU_CALLBACK
+  );
+
+  $items['oplata/result'] = array(
+    'title' => 'Transaction result',
+    'page callback' => 'oplata_result',
+    'access arguments' => array('access oplata'),
+    'type' => MENU_CALLBACK
+  );
+
+  return $items;
+}
+
+/**
+ * Menu callback: transaction result page.
+ */
+function oplata_result() {
+  $post = $_POST;
+  if ($post['OPL_STATUS']) {
+    switch ($post['OPL_STATUS']) {
+      case '2':
+        $hash = array($post['OPL_QID'], $post['OPL_ACCOUNT'], $post['OPL_STATUS'], $post['OPL_AMOUNT'], $post['OPL_TRANSID']);
+        if ($post['OPL_SHOPDATA']) $hash[] = $post['OPL_SHOPDATA'];
+        $hash = Oplata::inst()->hash($hash);
+        if ($post['OPL_SIGN'] != $hash) {
+          return t(variable_get('oplata_signature_error_message', 'Signature error! Please contact the site administrator.'));
+        }
+
+        $check = Oplata::inst()->getStatus($post['OPL_ACCOUNT'], $post['OPL_AMOUNT']);
+        switch ($check) {
+          case '2':
+            db_query("UPDATE {oplata_queue} SET transid=%d, status='ok' WHERE qid=%d", $post['OPL_TRANSID'], $post['OPL_ACCOUNT']);
+            user_deposit_incoming($post['OPL_AMOUNT'], 'Oplata.md', $post['OPL_ACCOUNT']);
+
+            return t(variable_get('oplata_success_message', "Transaction succeed!
+
+Transaction Id: !transid
+Transaction number: !account
+Amount: !amount
+Oplata.md shop data: !shopdata"), array(
+              '!shopdata' => $post['OPL_SHOPDATA'],
+              '!qid' => $post['OPL_QID'],
+              '!account' => $post['OPL_ACCOUNT'],
+              '!status' => $post['OPL_STATUS'],
+              '!amount' => $post['OPL_AMOUNT'],
+              '!transid' => $post['OPL_TRANSID'],
+            ));
+            break;
+
+          case '1':
+            db_query("UPDATE {oplata_queue} SET transid=%d, status='fail' WHERE qid=%d", $post['OPL_TRANSID'], $post['OPL_ACCOUNT']);
+            return t(variable_get('oplata_confirm_error_message', 'The transaction not confirmed.'));
+            break;
+
+          case '-1':
+            return t(variable_get('oplata_signature_error_message', 'Signature error! Please contact the site administrator.'));
+            break;
+        }
+
+        break;
+      default:
+        db_query("UPDATE {oplata_queue} SET transid=%d, status='fail' WHERE qid=%d", $post['OPL_TRANSID'], $post['OPL_ACCOUNT']);
+        return t(variable_get('oplata_error_message', 'Transaction returns error code.'));
+        break;
+    }
+  }
+  drupal_set_message(t('No post data'), 'error');
+  return '';
+}
+
+/**
+ * Build the checkout form
+ */
+function oplata_checkout() {
+  $form = array();
+
+  if ($granulity = oplata_get_granulity()) {
+    $form['amount'] = array(
+      '#type' => 'radios',
+      '#required' => true,
+      '#title' => t('Amount'),
+      '#options' => $granulity
+    );
+
+    $form['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Submit')
+    );
+  }
+
+  return $form;
+}
+
+/**
+ * Implementation of hook_submit().
+ */
+function oplata_checkout_submit($form, &$form_state) {
+  global $user, $language;
+
+  $lang = substr(strtolower($language->name), 0, 3);
+  $action = str_replace('%LANG', $lang, variable_get('oplata_checkout_action', 'https://oplata.md/%LANG/orders/merchant'));
+
+  db_query("INSERT INTO {oplata_queue} SET uid=%d, amount=%f", $user->uid, $form_state['values']['amount']);
+  $qid = db_result(db_query("SELECT MAX(qid) FROM {oplata_queue} LIMIT 1"));
+  $amount = $form_state['values']['amount'];
+  $oplid = variable_get('oplata_oplid', '');
+  $currency = variable_get('oplata_currency', 5);
+  $mail = $user->mail;
+  $shopdata = "arg0=1";
+  $hash = array($amount, $qid, $mail);
+  $hash = Oplata::inst()->hash($hash);
+
+  $form = "<form action=\"{$action}\" method=\"post\" id=\"pay-form\" style=\"display:none;\">
+  <input type=\"hidden\" name=\"OPL_SYSTEM\" value=\"{$currency}\" />
+  <input type=\"hidden\" name=\"OPL_ID\" value=\"{$oplid}\" />
+  <input type=\"hidden\" name=\"OPL_ACCOUNT\" value=\"{$qid}\" />
+  <input type=\"hidden\" name=\"OPL_AMOUNT\" value=\"{$amount}\" />
+  <input type=\"hidden\" name=\"OPL_EMAIL\" value=\"{$mail}\" />
+  <input type=\"hidden\" name=\"OPL_SIGN\" value=\"{$hash}\" />
+  <input type=\"submit\" id=\"form-submit\" value=\"submit\" />
+</form>";
+  $output = "<html><head><title></title></head></body>{$form}
+<script type=\"text/javascript\">
+document.getElementById('pay-form').submit();
+</script></body></html>";
+
+  die($output);
+}
+
+/**
+ * Return amount granulity
+ */
+function oplata_get_granulity() {
+  $rates = Oplata::inst()->getRates();
+  $currency = $rates[variable_get('oplata_currency', 5)]['currency'];
+  $return = array();
+  $values = explode(';', variable_get('oplata_granulity', "5;10;20;50;75;100"));
+  foreach ($values as $value) {
+    $return[intval($value)] = intval($value) .' '. t(strtolower($currency));
+  }
+  return $return;
+}

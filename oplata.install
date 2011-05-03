@@ -1,0 +1,61 @@
+<?php
+
+/**
+ * Implementation of hook_requirements().
+ */
+function oplata_requirements($phase) {
+  $requirements = array();
+  $t = get_t();
+
+  if (function_exists('oplata_checkout')) {
+    $requirements['oplata']['title'] = $t('Oplata.md configuration');
+    $urlkey = variable_get('oplata_urlkey', '');
+    $key = variable_get('oplata_key', '');
+    $oplid = variable_get('oplata_oplid', '');
+    $currency = variable_get('oplata_currency', '');
+    $cert = variable_get('oplata_cert', '');
+    if (!$urlkey || !$key || !$oplid || !$currency || !$cert) {
+      $requirements['oplata']['value'] = $t('Not configured');
+      $requirements['oplata']['severity'] = REQUIREMENT_ERROR;
+      $requirements['oplata']['description'] = $t('Oplata.md gate not configured. Please check configuration !url.', array('!url' => l($t('here'), 'admin/settings/oplata')));
+    } elseif (!file_exists($file = getcwd().base_path().$cert)) {
+      $requirements['oplata']['value'] = $t('Certification file not found');
+      $requirements['oplata']['severity'] = REQUIREMENT_ERROR;
+      $requirements['oplata']['description'] = $t('The certification file %file does not exists. Please check configuration !url.', array('%file' => $file, '!url' => l($t('here'), 'admin/settings/oplata')));
+    } else {
+      $requirements['oplata']['value'] = $t('Configured');
+      $requirements['oplata']['severity'] = REQUIREMENT_OK;
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implementation of hook_install().
+ */
+function oplata_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      db_query("CREATE TABLE {oplata_queue} (
+        qid int(11) NOT NULL AUTO_INCREMENT,
+        uid int(11) NOT NULL,
+        amount float NOT NULL,
+        transid int(11) NOT NULL,
+        created timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        status enum('wait','ok','fail') NOT NULL,
+        PRIMARY KEY (qid),
+        KEY uid (uid)
+      ) /*!40100 DEFAULT CHARACTER SET UTF8 */ ");
+    case 'pgsql':
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function oplata_uninstall() {
+  db_query("DROP TABLE IF EXISTS {oplata_queue}");
+}
