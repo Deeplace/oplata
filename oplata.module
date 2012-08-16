@@ -33,6 +33,31 @@ function oplata_menu() {
     'type' => MENU_NORMAL_ITEM,
   );
 
+  $items['admin/reports/oplata'] = array(
+    'title' => 'Oplata.md queue',
+    'description' => 'Show and manage the queue of the Oplata.md transactions',
+    'page callback' => 'oplata_queue',
+    'access arguments' => array('administer oplata'),
+    'file' => 'oplata.admin.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  $items['admin/reports/oplata/%/complete'] = array(
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('oplata_transaction_proceed', 3, 4),
+    'access arguments' => array('administer oplata'),
+    'file' => 'oplata.admin.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/reports/oplata/%/emulate'] = array(
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('oplata_transaction_proceed', 3, 4),
+    'access arguments' => array('administer oplata'),
+    'file' => 'oplata.admin.inc',
+    'type' => MENU_CALLBACK,
+  );
+
   $items['oplata/checkout'] = array(
     'title' => 'Oplata checkout',
     'page callback' => 'drupal_get_form',
@@ -115,6 +140,12 @@ function oplata_checkout() {
   $form = array();
 
   if ($granulity = oplata_get_granulity()) {
+    $form['user_guide'] = array(
+      '#value' => variable_get('oplata_checkout_user_guide', 'Checkout user guide
+
+Do not close the page until confirmation of payment.'),
+    );
+
     $form['amount'] = array(
       '#type' => 'radios',
       '#required' => true,
