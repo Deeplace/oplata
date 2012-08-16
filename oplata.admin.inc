@@ -166,17 +166,6 @@ INNER JOIN {users} u ON u.uid=q.uid";
 }
 
 /**
- * Menu callback: complete the transaction.
- */
-function oplata_transaction_complete($qid) {
-  $row = db_fetch_object(db_query("SELECT * FROM {oplata_queue} WHERE qid=%d", $qid));
-  db_query("UPDATE {oplata_queue} SET status='ok' WHERE qid=%d", $qid);
-  user_deposit_incoming($row->amount, 'Oplata.md', $row->qid, $row->uid);
-  drupal_set_message(t('The transaction has been completed.'));
-  drupal_goto('admin/reports/oplata');
-}
-
-/**
  * Menu callback: proceed the transaction.
  */
 function oplata_transaction_proceed($form_state, $qid, $op) {
