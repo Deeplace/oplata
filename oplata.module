@@ -210,8 +210,9 @@ function oplata_get_granulity() {
     if ($currency=='LEI') {
       $return[intval($value)] = intval($value) .' '. t(strtolower($currency));
     } elseif ($rate = $rates[variable_get('oplata_currency', 5)]['rate']) {
-      $lei_value = number_format(intval($value)/$rate, 2, '.', '');
-      $return[$lei_value] = intval($value) .' '. t(strtolower($currency)) .' ('.$lei_value.' '.t('lei').')';
+      $lei_value = intval($value);
+      $cur_value = number_format($lei_value*$rate, 2, '.', '');
+      $return[$lei_value] = $lei_value .' '. t('lei') .' ('.$cur_value.' '.t(strtolower($currency)).')';
     }
   }
   return $return;
