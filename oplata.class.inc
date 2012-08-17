@@ -26,7 +26,7 @@ class Oplata
     $this->oplid = variable_get('oplata_oplid', '');
     $this->cert = variable_get('oplata_cert', '');
     if ($this->debug = variable_get('oplata_debug', 0)) {
-      mkdir(getcwd().base_path().file_directory_path().'/oplata', 0777, true);
+      if (!file_exists($log_path = getcwd().base_path().file_directory_path().'/oplata')) mkdir($log_path, 0777, true);
       $this->logFile = getcwd().base_path().file_directory_path().'/oplata/'.date('Y-m-d').'.log';
       file_put_contents(getcwd().base_path().file_directory_path().'/oplata/.htaccess', 'Deny from all');
     }
