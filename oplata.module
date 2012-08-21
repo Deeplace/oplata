@@ -157,21 +157,20 @@ Do not close the page until confirmation of payment.'),
   );
 
   $rates = Oplata::inst()->getRates();
-  $lei_rate = $rates[5]; unset($rates[5]);
+  $lei_rate = $rates[5]; unset($rates[5]); array_unshift($rates, $lei_rate);
 
   $header = $rows = $granulity = array();
-  $header[] = t(strtolower($lei_rate['currency']));
   foreach ($rates as $rate) {
     $header[] = t(strtolower($rate['currency']));
   }
   $values = explode(';', variable_get('oplata_granulity', "5;10;20;50;75;100"));
   foreach ($values as $value) {
-    $row = array($value);
+    $row = array();
     foreach ($rates as $rate) {
-      $row[] = number_format($value*$rate['rate'], 2, '.', '');
+      $amount = $rate['currency']=='LEI'?$value:number_format($value*$rate['rate'], 2, '.', '');
+      $row["{$value}:{$rate['id']}"] = $granulity["{$value}:{$rate['id']}"] = $amount;
     }
     $rows[$value] = $row;
-    $granulity[$value] = $value;
   }
 
   $form['amount'] = array(
@@ -182,6 +181,7 @@ Do not close the page until confirmation of payment.'),
 
   $form['#header'] = $header;
   $form['#rows'] = $rows;
+  $form['#rates'] = $rates;
   $form['#theme'] = 'oplata_checkout';
 
   $form['submit'] = array(
@@ -198,14 +198,14 @@ Do not close the page until confirmation of payment.'),
 function oplata_checkout_submit($form, &$form_state) {
   global $user, $language;
 
+  list($amount, $currency) = explode(':', $form_state['values']['amount']);
+
   $lang = substr(strtolower($language->name), 0, 3);
   $action = str_replace('%LANG', $lang, variable_get('oplata_checkout_action', 'https://oplata.md/%LANG/orders/merchant'));
 
-  db_query("INSERT INTO {oplata_queue} SET uid=%d, amount=%f", $user->uid, $form_state['values']['amount']);
+  db_query("INSERT INTO {oplata_queue} SET uid=%d, amount=%f", $user->uid, $amount);
   $qid = db_result(db_query("SELECT MAX(qid) FROM {oplata_queue} LIMIT 1"));
-  $amount = $form_state['values']['amount'];
   $oplid = variable_get('oplata_oplid', '');
-  $currency = variable_get('oplata_currency', 5);
   $mail = $user->mail;
   $shopdata = "arg0=1";
   $hash = array($amount, $qid, $mail);
@@ -236,15 +236,11 @@ function theme_oplata_checkout($form) {
 
   $header = $form['#header'];
   $rows = $form['#rows'];
-
+  $rates = $form['#rates'];
   $output .= drupal_render($form['user_guide']);
-  $values = explode(';', variable_get('oplata_granulity', "5;10;20;50;75;100"));
-  foreach ($rows as $key => &$row) {
-    foreach ($values as $value) {
-      if ($value==$key) {
-        array_shift($row);
-        array_unshift($row, drupal_render($form['amount'][$value]));
-      }
+  foreach ($rows as &$row) {
+    foreach ($row as $key => &$subrow) {
+      $subrow = drupal_render($form['amount'][$key]);
     }
   }
 
@@ -252,24 +248,4 @@ function theme_oplata_checkout($form) {
   $output .= drupal_render($form);
 
   return $output;
-}
-
-/**
- * Return amount granulity
- */
-function oplata_get_granulity() {
-  $rates = Oplata::inst()->getRates();
-  $currency = $rates[variable_get('oplata_currency', 5)]['currency'];
-  $return = array();
-  $values = explode(';', variable_get('oplata_granulity', "5;10;20;50;75;100"));
-  foreach ($values as $value) {
-    if ($currency=='LEI') {
-      $return[intval($value)] = intval($value) .' '. t(strtolower($currency));
-    } elseif ($rate = $rates[variable_get('oplata_currency', 5)]['rate']) {
-      $lei_value = intval($value);
-      $cur_value = number_format($lei_value*$rate, 2, '.', '');
-      $return[$lei_value] = $lei_value .' '. t('lei') .' ('.$cur_value.' '.t(strtolower($currency)).')';
-    }
-  }
-  return $return;
 }
