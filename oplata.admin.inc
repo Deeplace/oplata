@@ -55,13 +55,6 @@ function oplata_settings() {
   foreach ($response as $id => $rate) {
     $currency[$id] = $rate['currency'];
   }
-  $form['oplata_currency'] = array(
-    '#type' => 'select',
-    '#title' => t('Currency'),
-    '#options' => $currency,
-    '#default_value' => variable_get('oplata_currency', 5)
-  );
-
   $form['oplata_granulity'] = array(
     '#type' => 'textfield',
     '#title' => t('Granulity'),

@@ -159,18 +159,17 @@ Do not close the page until confirmation of payment.'),
   $rates = Oplata::inst()->getRates();
   $lei_rate = $rates[5]; unset($rates[5]); array_unshift($rates, $lei_rate);
 
-  $header = $rows = $granulity = array();
-  foreach ($rates as $rate) {
-    $header[] = t(strtolower($rate['currency']));
-  }
+  $rows = $granulity = array();
+
   $values = explode(';', variable_get('oplata_granulity', "5;10;20;50;75;100"));
-  foreach ($values as $value) {
+  foreach ($rates as $rate) {
     $row = array();
-    foreach ($rates as $rate) {
+    $row["header"] = array('data' => t($rate['currency']) . "<br/>" . t($rate['name']), 'header' => TRUE);
+    foreach ($values as $value) {
       $amount = $rate['currency']=='LEI'?$value:number_format($value*$rate['rate'], 2, '.', '');
-      $row["{$value}:{$rate['id']}"] = $granulity["{$value}:{$rate['id']}"] = $amount;
+      $row["{$rate['id']}:{$value}"] = $granulity["{$rate['id']}:{$value}"] = $amount;
     }
-    $rows[$value] = $row;
+    $rows[$rate['id']] = $row;
   }
 
   $form['amount'] = array(
@@ -179,7 +178,6 @@ Do not close the page until confirmation of payment.'),
     '#options' => $granulity
   );
 
-  $form['#header'] = $header;
   $form['#rows'] = $rows;
   $form['#rates'] = $rates;
   $form['#theme'] = 'oplata_checkout';
@@ -198,7 +196,7 @@ Do not close the page until confirmation of payment.'),
 function oplata_checkout_submit($form, &$form_state) {
   global $user, $language;
 
-  list($amount, $currency) = explode(':', $form_state['values']['amount']);
+  list($currency, $amount) = explode(':', $form_state['values']['amount']);
 
   $lang = substr(strtolower($language->name), 0, 3);
   $action = str_replace('%LANG', $lang, variable_get('oplata_checkout_action', 'https://oplata.md/%LANG/orders/merchant'));
@@ -234,17 +232,20 @@ document.getElementById('pay-form').submit();
 function theme_oplata_checkout($form) {
   $output = '';
 
-  $header = $form['#header'];
+//  $header = $form['#header'];
   $rows = $form['#rows'];
   $rates = $form['#rates'];
   $output .= drupal_render($form['user_guide']);
+
   foreach ($rows as &$row) {
     foreach ($row as $key => &$subrow) {
-      $subrow = drupal_render($form['amount'][$key]);
+      if ($key != 'header') {
+        $subrow = drupal_render($form['amount'][$key]);
+      }
     }
   }
 
-  $output .= theme('table', $header, $rows, array(), t('Deposit incoming amounts (available payment systems).'));
+  $output .= theme('table', array(), $rows, array(), t('Deposit incoming amounts (available payment systems).'));
   $output .= drupal_render($form);
 
   return $output;

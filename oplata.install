@@ -12,9 +12,8 @@ function oplata_requirements($phase) {
     $urlkey = variable_get('oplata_urlkey', '');
     $key = variable_get('oplata_key', '');
     $oplid = variable_get('oplata_oplid', '');
-    $currency = variable_get('oplata_currency', '');
     $cert = variable_get('oplata_cert', '');
-    if (!$urlkey || !$key || !$oplid || !$currency || !$cert) {
+    if (!$urlkey || !$key || !$oplid || !$cert) {
       $requirements['oplata']['value'] = $t('Not configured');
       $requirements['oplata']['severity'] = REQUIREMENT_ERROR;
       $requirements['oplata']['description'] = $t('Oplata.md gate not configured. Please check configuration !url.', array('!url' => l($t('here'), 'admin/settings/oplata')));
